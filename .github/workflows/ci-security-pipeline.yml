@@ -34,7 +34,8 @@ jobs:
       - name: Run NPM Audit (Dependency Check)
         working-directory: ./juice-shop
         run: |
-          npm install --package-lock-only
+          npm install -g @angular/cli
+          npm install --legacy-peer-deps
           npm audit --audit-level=high || true
 
       - name: Build Docker Image
