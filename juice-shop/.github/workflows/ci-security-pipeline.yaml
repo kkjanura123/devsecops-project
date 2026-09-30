@@ -1,0 +1,68 @@
+name: DevSecOps CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  security-pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ---------------------------------------------------------
+      # 1. SECRETS SCANNING (Gitleaks)
+      # ---------------------------------------------------------
+      - name: Run Gitleaks Secrets Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ---------------------------------------------------------
+      # 2. SAST SCAN (Semgrep)
+      # ---------------------------------------------------------
+      - name: Run Semgrep SAST
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: auto
+
+      # ---------------------------------------------------------
+      # 3. DEPENDENCY SCANNING (npm audit)
+      # ---------------------------------------------------------
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run NPM Audit (Dependency Check)
+        working-directory: ./juice-shop
+        run: |
+          npm install --package-lock-only
+          npm audit --audit-level=high || true
+
+      # ---------------------------------------------------------
+      # 4. BUILD DOCKER IMAGE
+      # ---------------------------------------------------------
+      - name: Build Docker Image
+        working-directory: ./juice-shop
+        run: |
+          docker build -t juice-shop:latest .
+
+      # ---------------------------------------------------------
+      # 5. CONTAINER IMAGE SCANNING (Trivy) - FAILS ON CRITICAL
+      # ---------------------------------------------------------
+      - name: Run Trivy Container Vulnerability Scanner
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: 'juice-shop:latest'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL'
+  
